@@ -110,9 +110,11 @@ public class EurekaBootStrap implements ServletContextListener {
     @Override
     public void contextInitialized(ServletContextEvent event) {
         try {
+            // 初始化 eureka 环境
             initEurekaEnvironment();
+            // 初始化 eureka-server 上下文
             initEurekaServerContext();
-
+            // 把 eureka-server 上下文放到 ServletContext 中
             ServletContext sc = event.getServletContext();
             sc.setAttribute(EurekaServerContext.class.getName(), serverContext);
         } catch (Throwable e) {
