@@ -129,6 +129,15 @@ public class EurekaBootStrap implements ServletContextListener {
     protected void initEurekaEnvironment() throws Exception {
         logger.info("Setting the eureka configuration..");
 
+        /**
+         * 第一步：获取数据中心配置
+         * （1）ConfigurationManager.getConfigInstance() 获取配置实例，这是一个单例类，通过 double check 实现单例，
+         * 会在这时创建一个默认的 ConcurrentCompositeConfiguration 实例，里面包含了 defaultURLConfig，sysConfig，envConfig，
+         * appOverrideConfig，其中 sysConfig 就是 System.getProperty() 的获取到的系统相关属性，envConfig 是系统的环境变量，
+         * 也就是我们配置 JDK 环境变量的那个环境变量。
+         * （2）上面初始化好默认的配置实例之后，里面会包含一些比较基础的环境变量和系统属性值
+         * （3）获取部署的数据中心值，如果为 null，就默认设置为 default
+         */
         String dataCenter = ConfigurationManager.getConfigInstance().getString(EUREKA_DATACENTER);
         if (dataCenter == null) {
             logger.info("Eureka data center value eureka.datacenter is not set, defaulting to default");
@@ -136,6 +145,7 @@ public class EurekaBootStrap implements ServletContextListener {
         } else {
             ConfigurationManager.getConfigInstance().setProperty(ARCHAIUS_DEPLOYMENT_DATACENTER, dataCenter);
         }
+        // 第二步：从配置中获取部署环境的值，如果为 null，就默认设置为 test
         String environment = ConfigurationManager.getConfigInstance().getString(EUREKA_ENVIRONMENT);
         if (environment == null) {
             ConfigurationManager.getConfigInstance().setProperty(ARCHAIUS_DEPLOYMENT_ENVIRONMENT, TEST);
