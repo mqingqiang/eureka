@@ -147,6 +147,12 @@ public class EurekaBootStrap implements ServletContextListener {
      * init hook for server context. Override for custom logic.
      */
     protected void initEurekaServerContext() throws Exception {
+        /**
+         * 1、读取了 eureka-server.properties 和 eureka-server-环境.properties 配置文件，放入 Properties 中，最终放入
+         * ConfigurationManager 中
+         * 2、EurekaServerConfig 是基于接口的配置项读取，DefaultEurekaServerConfig 是其实现类
+         *
+         */
         EurekaServerConfig eurekaServerConfig = new DefaultEurekaServerConfig();
 
         // For backward compatibility
