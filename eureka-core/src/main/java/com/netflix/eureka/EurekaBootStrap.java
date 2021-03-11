@@ -201,7 +201,7 @@ public class EurekaBootStrap implements ServletContextListener {
             );
         }
 
-        // 初始化 eureka 节点
+        // 初始化 eureka 集群节点，这里可能就是代表了 eureka server 集群
         PeerEurekaNodes peerEurekaNodes = getPeerEurekaNodes(
                 registry,
                 eurekaServerConfig,
@@ -210,7 +210,7 @@ public class EurekaBootStrap implements ServletContextListener {
                 applicationInfoManager
         );
 
-        // 初始化 EurekaServerContext 上下文
+        // 初始化 EurekaServerContext 上下文，代表了当前这个 eureka server 的服务器上下文，服务器需要的所有东西都包含在这里面了
         serverContext = new DefaultEurekaServerContext(
                 eurekaServerConfig,
                 serverCodecs,
@@ -220,12 +220,12 @@ public class EurekaBootStrap implements ServletContextListener {
         );
         // 把 EurekaServer 上下文存起来，以后可以从任何地方通过 EurekaServerContextHolder 获取到上下文
         EurekaServerContextHolder.initialize(serverContext);
-        // 上下文初始化，主要执行了 PeerEurekaNodes 的启动以及注册表的初始化
+        // 上下文初始化，主要执行了 PeerEurekaNodes 的启动（可能就是将eureka集群启动起来）以及注册表的初始化
         serverContext.initialize();
         logger.info("Initialized server context");
 
         // Copy registry from neighboring eureka node
-        // 从相邻的 eureka server 节点拷贝注册表
+        // 从相邻的 eureka server 节点拷贝注册表，如果拷贝失败，就找下一个
         int registryCount = registry.syncUp();
         registry.openForTraffic(applicationInfoManager, registryCount);
 
