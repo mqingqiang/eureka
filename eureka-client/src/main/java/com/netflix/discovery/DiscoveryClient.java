@@ -433,7 +433,7 @@ public class DiscoveryClient implements EurekaClient {
         initScheduledTasks();
 
         try {
-            // 把当前这个 eureka client 注册监控
+            // 将自己注册了一个监控
             Monitors.registerObject(this);
         } catch (Throwable e) {
             logger.warn("Cannot register timers", e);
@@ -1251,7 +1251,7 @@ public class DiscoveryClient implements EurekaClient {
      * Initializes all scheduled tasks.
      */
     private void initScheduledTasks() {
-        // 如果要抓取，就初始化一个调度任务，定时去抓取
+        // 如果要抓取，就初始化一个抓取注册表的调度任务，定时去抓取
         if (clientConfig.shouldFetchRegistry()) {
             // registry cache refresh timer
             int registryFetchIntervalSeconds = clientConfig.getRegistryFetchIntervalSeconds();
@@ -1269,7 +1269,7 @@ public class DiscoveryClient implements EurekaClient {
                     registryFetchIntervalSeconds, TimeUnit.SECONDS);
         }
 
-        // 如果要向 eureka-server 注册的话，就初始化一个调度任务，定时向 eureka-server 发送心跳
+        // 如果要向 eureka-server 注册的话，就初始化一个定时发送心跳的调度任务，定时向 eureka-server 发送心跳
         if (clientConfig.shouldRegisterWithEureka()) {
             int renewalIntervalInSecs = instanceInfo.getLeaseInfo().getRenewalIntervalInSecs();
             int expBackOffBound = clientConfig.getHeartbeatExecutorExponentialBackOffBound();
@@ -1288,7 +1288,7 @@ public class DiscoveryClient implements EurekaClient {
                     ),
                     renewalIntervalInSecs, TimeUnit.SECONDS);
 
-            // 服务实例副本传播器，实际它就是一个线程，实现了Runnable类。调用 .start() 方法，它就启动了
+            // 服务实例副本传播器，实际它就是一个线程，实现了Runnable类。下面最后一行代码调用了 .start() 方法，它就启动了
             // InstanceInfo replicator
             instanceInfoReplicator = new InstanceInfoReplicator(
                     this,
@@ -1296,7 +1296,7 @@ public class DiscoveryClient implements EurekaClient {
                     clientConfig.getInstanceInfoReplicationIntervalSeconds(),
                     2); // burstSize
 
-            // 注册一个状态变更监听器
+            // 注册了一个状态变更监听器
             statusChangeListener = new ApplicationInfoManager.StatusChangeListener() {
                 @Override
                 public String getId() {
