@@ -62,6 +62,7 @@ class InstanceInfoReplicator implements Runnable {
     public void start(int initialDelayMs) {
         if (started.compareAndSet(false, true)) {
             instanceInfo.setIsDirty();  // for initial register
+            // 将自己作为一个线程，放到一个调度线程池中，默认是延迟 40 秒去执行这个线程
             Future next = scheduler.schedule(this, initialDelayMs, TimeUnit.SECONDS);
             scheduledPeriodicRef.set(next);
         }
@@ -102,10 +103,13 @@ class InstanceInfoReplicator implements Runnable {
 
     public void run() {
         try {
+            // 刷新了一下服务实例的信息
             discoveryClient.refreshInstanceInfo();
-
+            // eureka client 第一次启动的话，这里一定不为null，因为执行 start() 方法的时候，执行 instanceInfo.setIsDirty()
+            // 方法会设置这个时间
             Long dirtyTimestamp = instanceInfo.isDirtyWithTime();
             if (dirtyTimestamp != null) {
+                // 实际执行注册，这里的逻辑也很简单，就是发送了一个 http 请求给 eureka server
                 discoveryClient.register();
                 instanceInfo.unsetIsDirty(dirtyTimestamp);
             }

@@ -157,6 +157,9 @@ public class EurekaBootStrap implements ServletContextListener {
      * init hook for server context. Override for custom logic.
      */
     protected void initEurekaServerContext() throws Exception {
+
+        // 加载了 eureka-server.properties 配置文件，并放入 ConfigurationManager 中
+        // 然后基于 EurekaServerConfig 对外暴露的接口读取这个配置文件的配置项，并给每一个配置项提供了默认值
         EurekaServerConfig eurekaServerConfig = new DefaultEurekaServerConfig();
 
         // For backward compatibility
@@ -170,19 +173,25 @@ public class EurekaBootStrap implements ServletContextListener {
         ApplicationInfoManager applicationInfoManager = null;
 
         if (eurekaClient == null) {
+            // 跟 EurekaServerConfig 类似，这里读的是 eureka-client.properties
             EurekaInstanceConfig instanceConfig = isCloud(ConfigurationManager.getDeploymentContext())
                     ? new CloudInstanceConfig()
                     : new MyDataCenterInstanceConfig();
-            
+            // 初始化服务实例信息管理器，包含了服务实例的配置和信息
             applicationInfoManager = new ApplicationInfoManager(
                     instanceConfig, new EurekaConfigBasedInstanceInfoProvider(instanceConfig).get());
-            
+
+            // 跟 EurekaServerConfig 类似，加载 eureka-client.properties 配置文件，并通过暴露接口提供配置项读取
             EurekaClientConfig eurekaClientConfig = new DefaultEurekaClientConfig();
+
+            // 初始化一个 eureka client
             eurekaClient = new DiscoveryClient(applicationInfoManager, eurekaClientConfig);
         } else {
             applicationInfoManager = eurekaClient.getApplicationInfoManager();
         }
 
+        // 可以感知 eureka server 集群的服务实例注册表，也就是这里不仅包含了 eureka client 的服务实例，假设有一个 eureka 集群的话，
+        // 这里也包含了其他的 eureka server 中的服务实例注册表的信息。
         PeerAwareInstanceRegistry registry;
         if (isAws(applicationInfoManager.getInfo())) {
             registry = new AwsInstanceRegistry(
@@ -194,6 +203,7 @@ public class EurekaBootStrap implements ServletContextListener {
             awsBinder = new AwsBinderDelegate(eurekaServerConfig, eurekaClient.getEurekaClientConfig(), registry, applicationInfoManager);
             awsBinder.start();
         } else {
+            // 用 EurekaServerConfig，EurekaClientConfig，EurekaClient 构造一个注册表
             registry = new PeerAwareInstanceRegistryImpl(
                     eurekaServerConfig,
                     eurekaClient.getEurekaClientConfig(),
@@ -202,6 +212,7 @@ public class EurekaBootStrap implements ServletContextListener {
             );
         }
 
+        // 初始化 eureka 集群节点，这里可能就是代表了 eureka server 集群
         PeerEurekaNodes peerEurekaNodes = getPeerEurekaNodes(
                 registry,
                 eurekaServerConfig,
@@ -210,6 +221,7 @@ public class EurekaBootStrap implements ServletContextListener {
                 applicationInfoManager
         );
 
+        // 初始化 EurekaServerContext 上下文，代表了当前这个 eureka server 的服务器上下文，服务器需要的所有东西都包含在这里面了
         serverContext = new DefaultEurekaServerContext(
                 eurekaServerConfig,
                 serverCodecs,
@@ -217,17 +229,19 @@ public class EurekaBootStrap implements ServletContextListener {
                 peerEurekaNodes,
                 applicationInfoManager
         );
-
+        // 把 EurekaServer 上下文存起来，以后可以从任何地方通过 EurekaServerContextHolder 获取到上下文
         EurekaServerContextHolder.initialize(serverContext);
-
+        // 上下文初始化，主要执行了 PeerEurekaNodes 的启动（可能就是将eureka集群启动起来）以及注册表的初始化
         serverContext.initialize();
         logger.info("Initialized server context");
 
         // Copy registry from neighboring eureka node
+        // 从相邻的 eureka server 节点拷贝注册表，如果拷贝失败，就找下一个
         int registryCount = registry.syncUp();
         registry.openForTraffic(applicationInfoManager, registryCount);
 
         // Register all monitoring statistics.
+        // 注册了一些监控
         EurekaMonitors.registerAllStats();
     }
     

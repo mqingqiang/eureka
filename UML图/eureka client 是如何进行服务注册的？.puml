@@ -1,0 +1,34 @@
+@startuml
+skinparam responseMessageBelowArrow false
+activate DiscoveryClient
+DiscoveryClient -> DiscoveryClient: 构造方法
+DiscoveryClient -> DiscoveryClient: 调用 initScheduledTasks() 方法
+DiscoveryClient -> InstanceInfoReplicator: 执行 start() 方法
+deactivate DiscoveryClient
+activate InstanceInfoReplicator
+InstanceInfoReplicator -> InstanceInfoReplicator:  启动一个延迟40s执行的调度任务
+InstanceInfoReplicator -> InstanceInfoReplicator:  执行 run() 方法
+InstanceInfoReplicator -> DiscoveryClient: 第一步：刷新服务实例信息\n refreshInstanceInfo
+activate DiscoveryClient
+deactivate InstanceInfoReplicator
+DiscoveryClient -> ApplicationInfoManager: 调用 ApplicationInfoManager 组件\n 的一些方法刷新服务实例信息
+activate ApplicationInfoManager
+ApplicationInfoManager -> ApplicationInfoManager: 刷新数据中心信息\n refreshDataCenterInfoIfRequired()
+ApplicationInfoManager -> ApplicationInfoManager: 刷新契约信息\n refreshLeaseInfoIfRequired()
+note left: 配置有改变的时候才会刷新
+ApplicationInfoManager -> ApplicationInfoManager: 设置服务实例状态\n setInstanceStatus()
+ApplicationInfoManager --> DiscoveryClient:
+deactivate DiscoveryClient
+deactivate ApplicationInfoManager
+InstanceInfoReplicator -> DiscoveryClient: 第二步：调用 register() 方法进行注册
+activate DiscoveryClient
+DiscoveryClient -> EurekaTransport: 注册的逻辑交给 EurekaTransport
+activate EurekaTransport
+EurekaTransport -> AbstractJersey2EurekaHttpClient: 执行 register() 方法注册
+activate AbstractJersey2EurekaHttpClient
+AbstractJersey2EurekaHttpClient -> "Eureka Server": 发送 restful 风格的 http 请求给\neureka server，携带服务实例信息
+deactivate AbstractJersey2EurekaHttpClient
+deactivate EurekaTransport
+InstanceInfoReplicator -> InstanceInfo: 第三步：设置 isDirty 状态\nunsetIsDirty()
+deactivate DiscoveryClient
+@enduml
