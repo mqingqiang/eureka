@@ -1,0 +1,23 @@
+@startuml
+DiscoveryClient -> DiscoveryClient: 构造方法
+DiscoveryClient -> DiscoveryClient: 调用 initScheduledTasks() 方法
+DiscoveryClient -> InstanceInfoReplicator: 执行 start() 方法
+InstanceInfoReplicator -> InstanceInfoReplicator:  启动一个延迟40s执行的调度任务
+InstanceInfoReplicator -> InstanceInfoReplicator:  执行 run() 方法
+InstanceInfoReplicator -> DiscoveryClient: 刷新服务实例信息\n refreshInstanceInfo
+DiscoveryClient -> ApplicationInfoManager: 调用 ApplicationInfoManager 组件\n 的一些方法刷新服务实例信息
+ApplicationInfoManager -> ApplicationInfoManager: 刷新数据中心信息\n refreshDataCenterInfoIfRequired()
+ApplicationInfoManager -> ApplicationInfoManager: 刷新契约信息\n refreshLeaseInfoIfRequired()
+note left: 配置有改变的时候才会刷新
+ApplicationInfoManager -> ApplicationInfoManager: 设置服务实例状态\n setInstanceStatus()
+ApplicationInfoManager --> DiscoveryClient:
+DiscoveryClient --> InstanceInfoReplicator: 服务实例信息刷新完成
+InstanceInfoReplicator -> DiscoveryClient: 调用 register() 方法进行注册
+DiscoveryClient -> EurekaTransport: 注册的逻辑交给 EurekaTransport
+EurekaTransport -> AbstractJersey2EurekaHttpClient: 执行 register() 方法注册
+AbstractJersey2EurekaHttpClient -> AbstractJersey2EurekaHttpClient: 发送 restful 风格的 http 请求给\neureka server，携带服务实例信息
+AbstractJersey2EurekaHttpClient --> DiscoveryClient: 是否注册成功
+DiscoveryClient --> InstanceInfoReplicator:
+InstanceInfoReplicator -> InstanceInfo: 设置 isDirty 状态\nunsetIsDirty()
+
+@enduml
