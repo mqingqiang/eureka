@@ -180,7 +180,8 @@ public class EurekaBootStrap implements ServletContextListener {
             applicationInfoManager = eurekaClient.getApplicationInfoManager();
         }
 
-        // 可以集群感知的实例注册表，其实这个就是我们所谓的注册表
+        // 可以感知 eureka server 集群的服务实例注册表，也就是这里不仅包含了 eureka client 的服务实例，假设有一个 eureka 集群的话，
+        // 这里也包含了其他的 eureka server 中的服务实例注册表的信息。
         PeerAwareInstanceRegistry registry;
         if (isAws(applicationInfoManager.getInfo())) {
             registry = new AwsInstanceRegistry(
