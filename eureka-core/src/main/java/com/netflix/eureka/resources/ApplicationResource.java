@@ -144,6 +144,14 @@ public class ApplicationResource {
     public Response addInstance(InstanceInfo info,
                                 @HeaderParam(PeerEurekaNode.HEADER_REPLICATION) String isReplication) {
         logger.debug("Registering instance {} (replication={})", info.getId(), isReplication);
+        /*
+         * 闪光点：防御式编程，保证代码的健壮性。一个写得非常好的代码，一定要能够应对别人胡乱传递的各种参数，所以重要的接口，
+         * 上来就是一个代码逻辑，对请求参数进行大量的校验
+         *
+         * 槽点1：这里的校验放在了主方法中，一般建议，把这种重要的请求参数的校验逻辑，都放在单独的私有方法中。
+         * 我知道你在这里做了校验就可以了，但是你别强迫我在这里读一下。
+         * 槽点2：大量的硬编码（magic number）
+         */
         // validate that the instanceinfo contains all the necessary required fields
         if (isBlank(info.getId())) {
             return Response.status(400).entity("Missing instanceId").build();
@@ -166,6 +174,11 @@ public class ApplicationResource {
         if (dataCenterInfo instanceof UniqueIdentifier) {
             String dataCenterInfoId = ((UniqueIdentifier) dataCenterInfo).getId();
             if (isBlank(dataCenterInfoId)) {
+                /*
+                 * 这里的代码不应该跟 AWS 耦合，你可以在配置文件专门搞一个配置项，eureka.server.env = default，允许修改为 eureka.server.env = aws,
+                 * 然后在代码里的任何地方，要区别对待 AWS 环境的地方，直接根据这个配置项，获取一个策略，比如 DefaultDataCenterInfo、AWSDataCenterInfo,
+                 * 然后对外统一提供一个 DataCenterInfo 接口，统一的面向 DataCenterInfo 接口编程，要获取具体的某个 DataCenterInfo，可以用一个工厂来获取。
+                 */
                 boolean experimental = "true".equalsIgnoreCase(serverConfig.getExperimental("registration.validation.dataCenterInfoId"));
                 if (experimental) {
                     String entity = "DataCenterInfo of type " + dataCenterInfo.getClass() + " must contain a valid id";

@@ -194,6 +194,11 @@ public abstract class AbstractInstanceRegistry implements InstanceRegistry {
             read.lock();
             Map<String, Lease<InstanceInfo>> gMap = registry.get(registrant.getAppName());
             REGISTER.increment(isReplication);
+            /*
+             * 如果某个服务是第一次来注册，通过 registry.get 是获取不到 gMap 的，gMap 实际上就是某个服务的注册表信息，它是个空
+             * 此时就会创建一个新的 Map，给放到大的这个注册表 register 中的 Map 去
+             * register 中的 Map，就是一个注册表，里面包含了每个服务的每个服务实例的注册信息。通过 appName 获取到的是某个服务的注册信息
+             */
             if (gMap == null) {
                 final ConcurrentHashMap<String, Lease<InstanceInfo>> gNewMap = new ConcurrentHashMap<String, Lease<InstanceInfo>>();
                 gMap = registry.putIfAbsent(registrant.getAppName(), gNewMap);

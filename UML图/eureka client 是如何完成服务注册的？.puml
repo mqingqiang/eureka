@@ -1,0 +1,19 @@
+@startuml
+ApplicationResourceTest -> ApplicationResource ++: addInstance()
+ApplicationResource -> ApplicationResource: 校验入参
+ApplicationResource -> PeerAwareInstanceRegistry ++: 注册 register()
+PeerAwareInstanceRegistry -> AbstractInstanceRegistry ++ : 委托父类注册 register()
+AbstractInstanceRegistry -> registerMap ++ : 第一步：获取服务的当前所有\n 实例的注册信息
+return 返回gMap\n（有可能为空，如果这是这个\n服务第一个来注册的实例的话）
+AbstractInstanceRegistry -> Lease ++ : 第二步：构造一个新的租约信息\n（基于传入的InstanceInfo）
+return
+AbstractInstanceRegistry -> registerMap ++: 第三步：把租约Lease放入注册表中
+return
+AbstractInstanceRegistry -> InstanceInfo ++: 第四步：更新实例信息\n（这个InstanceInfo会放在Lease中）
+return
+AbstractInstanceRegistry -> AbstractInstanceRegistry: 第五步：把这个实例放入\nrecentlyChangedQueue中
+AbstractInstanceRegistry -> AbstractInstanceRegistry: 第六步：失效缓存 invalidateCache()
+return
+return
+return
+@enduml
