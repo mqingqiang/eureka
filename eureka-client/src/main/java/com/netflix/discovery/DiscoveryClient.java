@@ -939,14 +939,27 @@ public class DiscoveryClient implements EurekaClient {
         Stopwatch tracer = FETCH_REGISTRY_TIMER.start();
 
         try {
+            /*
+             * Applications 是什么东西呢？
+             * （1）Application 是一个服务，比如 ServiceA，它包含了所有这个 ServiceA 的所有服务实例信息，比如 i-001,i-002 等，也就是
+             * 一个 Application 就代表了这个服务下的所有实例，因为一个服务下会部署多台机器，每台机器就是一个服务实例
+             * （2）Application 是一个服务，那 Appliations 就是包含了所有的服务了。
+             * （3）如果当前这个实例是第一次启动，那么理所当然 Applications 就是 null 了，因为它还没有跟其他 eureka 进行通信嘛，它肯定
+             * 不会有别人的服务信息
+             */
             // If the delta is disabled or if it is the first time, get all
             // applications
             Applications applications = getApplications();
 
+            /*
+             * 这一坨 if 条件的代码很垃圾，应该把每一个条件抽出来，写成这样：boolean shouldDisableDelta = clientConfig.shouldDisableDelta();
+             * 第一次启动并初始化，这一坨条件肯定是 true，至少 applications 肯定是 null 了。所以第一次启动会全量拉取注册表；
+             * 之后再次进来，就可能不满足了，就会拉取增量的注册表
+             */
             if (clientConfig.shouldDisableDelta()
                     || (!Strings.isNullOrEmpty(clientConfig.getRegistryRefreshSingleVipAddress()))
                     || forceFullRegistryFetch // 这个是 false
-                    || (applications == null)
+                    || (applications == null) // 第一次拉取注册表的话，这里为 true
                     || (applications.getRegisteredApplications().size() == 0)
                     || (applications.getVersion() == -1)) //Client application does not have latest library supporting delta
             {
@@ -1041,6 +1054,8 @@ public class DiscoveryClient implements EurekaClient {
 
         logger.info("Getting all instance registry info from the eureka server");
 
+        // 全量拉取注册表，实际是执行 EurekaHttpClient 的 getApplications() 方法，给 eureka server 发送 http 请求，
+        // 调用 eureka server 的 restful 接口拉取全量注册表
         Applications apps = null;
         EurekaHttpResponse<Applications> httpResponse = clientConfig.getRegistryRefreshSingleVipAddress() == null
                 ? eurekaTransport.queryClient.getApplications(remoteRegionsRef.get())
