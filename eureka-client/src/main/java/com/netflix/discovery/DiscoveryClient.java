@@ -1092,6 +1092,7 @@ public class DiscoveryClient implements EurekaClient {
         long currentUpdateGeneration = fetchRegistryGeneration.get();
 
         Applications delta = null;
+        // 调用 eureka server 的 http 接口获取增量注册表，请求地址是：http://localhost:8080/v2/apps/delta
         EurekaHttpResponse<Applications> httpResponse = eurekaTransport.queryClient.getDelta(remoteRegionsRef.get());
         if (httpResponse.getStatusCode() == Status.OK.getStatusCode()) {
             delta = httpResponse.getEntity();
@@ -1100,13 +1101,16 @@ public class DiscoveryClient implements EurekaClient {
         if (delta == null) {
             logger.warn("The server does not allow the delta revision to be applied because it is not safe. "
                     + "Hence got the full registry.");
+            // 如果获取到的增量注册表为 null，则去抓取全量注册表
             getAndStoreFullRegistry();
         } else if (fetchRegistryGeneration.compareAndSet(currentUpdateGeneration, currentUpdateGeneration + 1)) {
             logger.debug("Got delta update with apps hashcode {}", delta.getAppsHashCode());
             String reconcileHashCode = "";
             if (fetchRegistryUpdateLock.tryLock()) {
                 try {
+                    // 合并增量注册表 delta 到本地
                     updateDelta(delta);
+                    // 计算合并后的本地注册表的 hashcode 值
                     reconcileHashCode = getReconcileHashCode(applications);
                 } finally {
                     fetchRegistryUpdateLock.unlock();
@@ -1115,6 +1119,8 @@ public class DiscoveryClient implements EurekaClient {
                 logger.warn("Cannot acquire update lock, aborting getAndUpdateDelta");
             }
             // There is a diff in number of instances for some reason
+            // 一致性hash比对，比如比对不一致，证明eureka client 和 eureka server 的数据不一定，不知道在哪里出问题了
+            // 此时就要重新全量拉取一次注册表
             if (!reconcileHashCode.equals(delta.getAppsHashCode()) || clientConfig.shouldLogDeltaDiff()) {
                 reconcileAndLogDifference(delta, reconcileHashCode);  // this makes a remoteCall
             }
@@ -1228,6 +1234,7 @@ public class DiscoveryClient implements EurekaClient {
                 }
 
                 ++deltaCount;
+                // 如果要新增，就添加到本地注册表中
                 if (ActionType.ADDED.equals(instance.getActionType())) {
                     Application existingApp = applications.getRegisteredApplications(instance.getAppName());
                     if (existingApp == null) {
@@ -1236,6 +1243,7 @@ public class DiscoveryClient implements EurekaClient {
                     logger.debug("Added instance {} to the existing apps in region {}", instance.getId(), instanceRegion);
                     applications.getRegisteredApplications(instance.getAppName()).addInstance(instance);
                 } else if (ActionType.MODIFIED.equals(instance.getActionType())) {
+                    // 如果要更新，就获取这个服务的注册表，更新这个实例
                     Application existingApp = applications.getRegisteredApplications(instance.getAppName());
                     if (existingApp == null) {
                         applications.addApplication(app);
@@ -1245,6 +1253,7 @@ public class DiscoveryClient implements EurekaClient {
                     applications.getRegisteredApplications(instance.getAppName()).addInstance(instance);
 
                 } else if (ActionType.DELETED.equals(instance.getActionType())) {
+                    // 如果要删除，就从本地注册表中把这个实例删除掉
                     Application existingApp = applications.getRegisteredApplications(instance.getAppName());
                     if (existingApp == null) {
                         applications.addApplication(app);
@@ -1272,6 +1281,7 @@ public class DiscoveryClient implements EurekaClient {
         // 如果要抓取，就初始化一个抓取注册表的调度任务，定时去抓取
         if (clientConfig.shouldFetchRegistry()) {
             // registry cache refresh timer
+            // 定时拉取注册表的时间间隔，默认是 30 秒
             int registryFetchIntervalSeconds = clientConfig.getRegistryFetchIntervalSeconds();
             int expBackOffBound = clientConfig.getCacheRefreshExecutorExponentialBackOffBound();
             scheduler.schedule(
@@ -1480,6 +1490,7 @@ public class DiscoveryClient implements EurekaClient {
         try {
             boolean isFetchingRemoteRegionRegistries = isFetchingRemoteRegionRegistries();
 
+            // 前面这一大串都先不用管先
             boolean remoteRegionsModified = false;
             // This makes sure that a dynamic change to remote regions to fetch is honored.
             String latestRemoteRegions = clientConfig.fetchRegistryForRemoteRegions();
@@ -1504,6 +1515,7 @@ public class DiscoveryClient implements EurekaClient {
                 }
             }
 
+            // 真正拉取注册表的是这一行代码
             boolean success = fetchRegistry(remoteRegionsModified);
             if (success) {
                 registrySize = localRegionApps.get().size();
