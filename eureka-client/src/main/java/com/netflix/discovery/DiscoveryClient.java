@@ -884,22 +884,28 @@ public class DiscoveryClient implements EurekaClient {
         if (isShutdown.compareAndSet(false, true)) {
             logger.info("Shutting down DiscoveryClient ...");
 
+            // 取消状态变更监听器的注册
             if (statusChangeListener != null && applicationInfoManager != null) {
                 applicationInfoManager.unregisterStatusChangeListener(statusChangeListener.getId());
             }
 
+            // 关闭一堆调度任务
             cancelScheduledTasks();
 
             // If APPINFO was registered
             if (applicationInfoManager != null && clientConfig.shouldRegisterWithEureka()) {
+                // 把服务实例状态设为 DOWN，表示下线
                 applicationInfoManager.setInstanceStatus(InstanceStatus.DOWN);
+                // 给 eureka server 发送服务下线请求
                 unregister();
             }
 
+            // 关闭底层网络通信组件
             if (eurekaTransport != null) {
                 eurekaTransport.shutdown();
             }
 
+            // 关闭监控
             heartbeatStalenessMonitor.shutdown();
             registryStalenessMonitor.shutdown();
 
