@@ -596,6 +596,7 @@ public abstract class AbstractInstanceRegistry implements InstanceRegistry {
     public void evict(long additionalLeaseMs) {
         logger.debug("Running the evict task");
 
+        // 这个跟自我保护机制相关
         if (!isLeaseExpirationEnabled()) {
             logger.debug("DS: lease expiration is currently disabled.");
             return;
@@ -605,11 +606,13 @@ public abstract class AbstractInstanceRegistry implements InstanceRegistry {
         // if we do not that, we might wipe out whole apps before self preservation kicks in. By randomizing it,
         // the impact should be evenly distributed across all applications.
         List<Lease<InstanceInfo>> expiredLeases = new ArrayList<>();
+        // 遍历注册表中所有的服务实例
         for (Entry<String, Map<String, Lease<InstanceInfo>>> groupEntry : registry.entrySet()) {
             Map<String, Lease<InstanceInfo>> leaseMap = groupEntry.getValue();
             if (leaseMap != null) {
                 for (Entry<String, Lease<InstanceInfo>> leaseEntry : leaseMap.entrySet()) {
                     Lease<InstanceInfo> lease = leaseEntry.getValue();
+                    // 判断服务实例是否过期或失效了，也就是服务实例是否故障了
                     if (lease.isExpired(additionalLeaseMs) && lease.getHolder() != null) {
                         expiredLeases.add(lease);
                     }
@@ -619,14 +622,25 @@ public abstract class AbstractInstanceRegistry implements InstanceRegistry {
 
         // To compensate for GC pauses or drifting local time, we need to use current registry size as a base for
         // triggering self-preservation. Without that we would wipe out full registry.
+        /*
+         * 不会一致性摘除过多服务实例，分批摘除。默认配置下，每次
+         */
+        // 当前本地注册表的条数，比如：registrySize = 20
         int registrySize = (int) getLocalRegistrySize();
+        // getRenewalPercentThreshold 默认是 0.85。registrySizeThreshold = 20 * 0.85 = 17
         int registrySizeThreshold = (int) (registrySize * serverConfig.getRenewalPercentThreshold());
+        // 最多一次性能摘除的服务实例数量：evictionLimit = 20 - 17 = 3，也就是最多只能摘除 3 个服务实例
         int evictionLimit = registrySize - registrySizeThreshold;
 
+        // 如果故障的服务实例数量是 8 个，上面算出来最多只能摘除 3 个，这里就会取一个最小值作为需要摘除的服务实例数量。
+        // toEvict = 3
         int toEvict = Math.min(expiredLeases.size(), evictionLimit);
         if (toEvict > 0) {
             logger.info("Evicting {} items (expired={}, evictionLimit={})", toEvict, expiredLeases.size(), evictionLimit);
-
+            // 通过上面的计算。下面的代码会随机从 8 个故障服务实例中摘除 3 个服务实例。那么剩下的 5 个故障服务怎么处理呢？
+            // 答案是等下次执行这个方法的时候，再次摘除3个。
+            // 也就是说 8 个服务同时故障了，但是每次只能摘除 3 个，这个方法至少要执行 3 个，才能把 8 个故障服务全部摘除。
+            // 这个方法默认每隔 60 秒才会执行一次，8个服务实例全部摘除至少要花 3 分钟。
             Random random = new Random(System.currentTimeMillis());
             for (int i = 0; i < toEvict; i++) {
                 // Pick a random item (Knuth shuffle algorithm)
@@ -638,6 +652,7 @@ public abstract class AbstractInstanceRegistry implements InstanceRegistry {
                 String id = lease.getHolder().getId();
                 EXPIRED.increment();
                 logger.warn("DS: Registry: expired lease for {}/{}", appName, id);
+                // 把服务实例给摘掉。
                 internalCancel(appName, id, false);
             }
         }
@@ -1262,6 +1277,11 @@ public abstract class AbstractInstanceRegistry implements InstanceRegistry {
         @Override
         public void run() {
             try {
+                /*
+                 * 获取一个补偿时间。默认是每隔 60 秒会执行一次这个方法，但是有时候系统卡住的时候，比如上一次执行是 7:00:00，
+                 * 下一次执行本来应该是7:01:00，但是中间由于 fullgc 卡顿了，本地 Linux 操作系统的时钟出问题了等原因，7:01:30 才执行，这就比预期迟了 30 秒，这延迟的 30 秒
+                 * 就是所谓的补偿时间
+                 */
                 long compensationTimeMs = getCompensationTimeMs();
                 logger.info("Running the evict task with compensationTime {}ms", compensationTimeMs);
                 evict(compensationTimeMs);
@@ -1277,14 +1297,20 @@ public abstract class AbstractInstanceRegistry implements InstanceRegistry {
          * according to the configured cycle.
          */
         long getCompensationTimeMs() {
+            // 先获取当前时间（7:01:30）
             long currNanos = getCurrentTimeNano();
+
+            // 把当前时间设置进 lastExecutionNanosRef 并获取到上一次设置的时间（比如 7:00:00）
             long lastNanos = lastExecutionNanosRef.getAndSet(currNanos);
             if (lastNanos == 0l) {
                 return 0l;
             }
-
+            // 当前时间跟上一次执行这个方法的时间差（7:01:30-7:00:00=90秒）
             long elapsedMs = TimeUnit.NANOSECONDS.toMillis(currNanos - lastNanos);
+            // getEvictionIntervalTimerInMs 默认 60 秒，也就是我期望相差 60 秒。
+            // compensationTime 实际登录 30 秒，也就是这个方法的执行比我预期的晚了 30 秒
             long compensationTime = elapsedMs - serverConfig.getEvictionIntervalTimerInMs();
+            // 如果 compensationTime 比预期晚了，就给他补偿回来，也就是后面判断服务故障的时候，要多算 30 秒。
             return compensationTime <= 0l ? 0l : compensationTime;
         }
 

@@ -60,6 +60,7 @@ public class Lease<T> {
      * {@link #DEFAULT_DURATION_IN_SECS}.
      */
     public void renew() {
+        // 服务续约（心跳）就更新一下 lastUpdateTimestamp，这里多加了一个 duration（60秒），其实这是个bug
         lastUpdateTimestamp = System.currentTimeMillis() + duration;
 
     }
@@ -108,6 +109,7 @@ public class Lease<T> {
      * @param additionalLeaseMs any additional lease time to add to the lease evaluation in ms.
      */
     public boolean isExpired(long additionalLeaseMs) {
+        // 每次服务实例发送心跳的时候，都会更新一下 lastUpdateTimestamp，
         return (evictionTimestamp > 0 || System.currentTimeMillis() > (lastUpdateTimestamp + duration + additionalLeaseMs));
     }
 
