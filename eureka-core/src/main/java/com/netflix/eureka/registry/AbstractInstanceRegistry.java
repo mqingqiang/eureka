@@ -223,6 +223,11 @@ public abstract class AbstractInstanceRegistry implements InstanceRegistry {
                 }
             } else {
                 // The lease does not exist and hence it is a new registration
+                /*
+                 * 进到这里来，证明这是这个服务实例第一次来注册。第一次注册需要更新 “每分钟期望的心跳次数”。
+                 * 这里的逻辑也超级简单，来一个服务注册，期望的每分钟心跳次数就 +2，写这个代码的人也是个奇葩，
+                 * 你想想，万一人家每分钟发 6 次心跳呢？难道这里不是应该 +6 吗？
+                 */
                 synchronized (lock) {
                     if (this.expectedNumberOfRenewsPerMin > 0) {
                         // Since the client wants to cancel it, reduce the threshold
@@ -596,7 +601,8 @@ public abstract class AbstractInstanceRegistry implements InstanceRegistry {
     public void evict(long additionalLeaseMs) {
         logger.debug("Running the evict task");
 
-        // 这个跟自我保护机制相关
+        // 这个跟自我保护机制相关。如果 isLeaseExpirationEnabled() 方法返回 false，就直接返回了，就不会走下面的代码了。
+        // 也就是说不会摘除任何服务实例了。这就是 eureka 的自我保护机制的作用
         if (!isLeaseExpirationEnabled()) {
             logger.debug("DS: lease expiration is currently disabled.");
             return;
@@ -654,6 +660,14 @@ public abstract class AbstractInstanceRegistry implements InstanceRegistry {
                 logger.warn("DS: Registry: expired lease for {}/{}", appName, id);
                 // 把服务实例给摘掉。
                 internalCancel(appName, id, false);
+                synchronized (lock) {
+                    if (this.expectedNumberOfRenewsPerMin > 0) {
+                        // Since the client wants to cancel it, reduce the threshold (1 for 30 seconds, 2 for a minute)
+                        this.expectedNumberOfRenewsPerMin = this.expectedNumberOfRenewsPerMin - 2;
+                        this.numberOfRenewsPerMinThreshold =
+                                (int) (this.expectedNumberOfRenewsPerMin * serverConfig.getRenewalPercentThreshold());
+                    }
+                }
             }
         }
     }

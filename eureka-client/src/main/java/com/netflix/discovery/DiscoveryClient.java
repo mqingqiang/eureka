@@ -352,10 +352,12 @@ public class DiscoveryClient implements EurekaClient {
 
         logger.info("Initializing Eureka in region {}", clientConfig.getRegion());
 
-        // 如果这两玩意都配置了 false，证明我们这个是 eureka server 并且是单机，就释放一些资源省得浪费系统资源
-        // 如果仅仅是 eureka client，这两个配置肯定不会是 false，默认就是 true
-        // 但是如果是 eureka client，并且是集群，那么 eureka server 本身也会作为一个 eureka client，向其他 eureka server 进行注册
-        // 如果是 eureka client,但是部署的是单机，那么也不用向其他 eureka server 进行注册，就会把这两个参数手动设置为 false
+        /*
+         * （1）如果这两玩意都配置了 false，证明我们这个是 eureka server 并且是单机，就释放一些资源省得浪费系统资源
+         * （2）如果仅仅是 eureka client，这两个配置肯定不会是 false，默认就是 true
+         * （3）但是如果是 eureka client，并且是集群，那么 eureka server 本身也会作为一个 eureka client，向其他 eureka server 进行注册
+         * （4）如果是 eureka server,但是部署的是单机，那么也不用向其他 eureka server 进行注册，就会把这两个参数手动设置为 false
+         */
         if (!config.shouldRegisterWithEureka() && !config.shouldFetchRegistry()) {
             logger.info("Client configured to neither register nor query for data.");
             scheduler = null;

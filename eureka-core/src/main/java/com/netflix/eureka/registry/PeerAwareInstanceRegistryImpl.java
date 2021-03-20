@@ -207,19 +207,32 @@ public class PeerAwareInstanceRegistryImpl extends AbstractInstanceRegistry impl
         // Copy entire entry from neighboring DS node
         int count = 0;
 
+        // 重试次数，默认是 5 次。可以通过配置项 eureka.numberRegistrySyncRetries 配置
         for (int i = 0; ((i < serverConfig.getRegistrySyncRetries()) && (count == 0)); i++) {
             if (i > 0) {
                 try {
+                    /*
+                     * （1）如果从自己的 eureka client 获取不到注册表，可能是其他的 eureka server 还没有启动，
+                     * 所以先休眠一下，默认是 30 秒。通过配置项 eureka.registrySyncRetryWaitMs 配置
+                     * （2）休眠之后，会再次从自己的 eureka client 中获取。默认情况下，eureka client 会每隔 30 秒去其他
+                     * eureka server 中拉取一次注册表
+                     * （3）如果重试了 5 次还是没获取到注册表，证明可能当前这个 eureka server 是单机部署的，并不是一个集群
+                     */
                     Thread.sleep(serverConfig.getRegistrySyncRetryWaitMs());
                 } catch (InterruptedException e) {
                     logger.warn("Interrupted during registry transfer..");
                     break;
                 }
             }
+            // 从自己的 eureka client 中获取注册表。
+            // 由于 eureka server 集群中，每个 eureka server 自己也会作为一个 eureka client，自己的 eureka client 会从
+            // 其他的 eureka server 中拉取注册表，所有这里直接从自己的 eureka client 中获取注册表，就相当于是从其他 eureka server
+            // 中拉取的了
             Applications apps = eurekaClient.getApplications();
             for (Application app : apps.getRegisteredApplications()) {
                 for (InstanceInfo instance : app.getInstances()) {
                     try {
+                        // 判断是否是可注册的。不是部署在亚马逊云上，这里都会返回 true
                         if (isRegisterable(instance)) {
                             register(instance, instance.getLeaseInfo().getDurationInSecs(), true);
                             count++;
@@ -479,10 +492,20 @@ public class PeerAwareInstanceRegistryImpl extends AbstractInstanceRegistry impl
 
     @Override
     public boolean isLeaseExpirationEnabled() {
+        // 判断有没有开启自我保护机制，通过参数 eureka.enableSelfPreservation 配置，默认是 true。
+        // 也就是默认是开启自我保护机制的，所有这里不成立
         if (!isSelfPreservationModeEnabled()) {
             // The self preservation mode is disabled, hence allowing the instances to expire.
             return true;
         }
+        /*
+         * numberOfRenewsPerMinThreshold：我期望的一分钟要最少要发送多少个心跳过来，所有服务实例在一分钟之内至少要发送的心跳次数，
+         * 没达到就会发挥 false，触发自我保护机制，不在摘除任何服务实例了
+         */
+        // getNumOfRenewsInLastMin()：获取上一分钟所有服务实例一共发送的心跳次数
+        // 假设 numberOfRenewsPerMinThreshold=100，我期望一分钟要发送 100 次心跳过来
+        // 结果 getNumOfRenewsInLastMin() = 80，实际上一分钟只发送了 80 次心跳
+        // 这时候就会 false，触发自我保护机制，不再摘除任何服务实例。因为 eureka 可能觉得是自己出现问题了，导致别人发送不了心跳过来。
         return numberOfRenewsPerMinThreshold > 0 && getNumOfRenewsInLastMin() > numberOfRenewsPerMinThreshold;
     }
 

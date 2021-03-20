@@ -236,7 +236,10 @@ public class EurekaBootStrap implements ServletContextListener {
         logger.info("Initialized server context");
 
         // Copy registry from neighboring eureka node
-        // 从相邻的 eureka server 节点拷贝注册表，如果拷贝失败，就找下一个
+        /*
+         * （1）从相邻的 eureka server 节点拷贝注册表，如果拷贝失败，会休眠 30 秒，再次重试。重试 5 次都同步不到，就可能是单机部署
+         * （2） 返回的 registryCount 是从其他
+         */
         int registryCount = registry.syncUp();
         // 方法名意思是：打开注册表，可以接收请求
         registry.openForTraffic(applicationInfoManager, registryCount);
